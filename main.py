@@ -32,7 +32,7 @@ def adduser(id, email, hash_password):
     return "Ошибка! " + str(e)
 
 
-
+#регистрация
 @app.route('/register', methods=['POST'])
 def register_user():
   try:
@@ -150,7 +150,7 @@ def delete_admin(user_id):
   try:
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    cursor.execute('''UPDATE user_login (role) VALUES ?''', str('0'),)
+    cursor.execute('''UPDATE user_login SET role = ? WHERE user_id = ?''', ('0', str(user_id)))
     conn.commit()
     conn.close()
     print('Пользователь' + str(user_id) + 'перестал стал админом')
@@ -160,20 +160,18 @@ def delete_admin(user_id):
 
 
 
-#согласие на встречу
 @app.route('/add_meeting_agreement/<user_id>/<during>', methods=['GET'])
 def add_agreement(user_id, during):
-  try:
-    conn = sqlite3.connect('databas.db')
-    cursor = conn.cursor()
-    cursor.execute('''INSERT INTO meetings_on_week (user_id, during) VALUES (?, ?)''', (str(user_id), during))
-    cursor.execute('''INSET INTO meetings_on_week (meetings_count) VALUES (?)''', get_user_meetings_count(user_id))
-    conn.commit()
-    conn.close()
-    return jsonify(1)
-  except Exception as e:
-    return "Ошибка" + str(e)
-
+    try:
+        conn = sqlite3.connect('database.db')
+        cursor = conn.cursor()
+        cursor.execute('''INSERT INTO meetings_on_week (user_id, during) VALUES (?, ?)''', (str(user_id), during))
+        cursor.execute('''UPDATE meetings_on_week SET meetings_count = ? WHERE user_id = ?''', (get_user_meetings_count(user_id), user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True})
+    except Exception as e:
+        return "Ошибка: " + str(e)
 
 
 #кол-во встреч юзера по id
@@ -216,7 +214,7 @@ def send_form_if_meeting(user_id):
     try:
         conn = sqlite3.connect('database.db')
         cursor = conn.cursor()
-        cursor.execute('''SELECT user_id_1, user_id_2 FROM meetings WHERE user_id_1 = ? OR user_id_2 = ?''', (str(user_id), str(user_id),))
+        cursor.execute('''SELECT user_id_1, user_id_2 FROM meetings WHERE (user_id_1 = ? OR user_id_2 = ?) AND status = 0''', (str(user_id), str(user_id),))
         a = cursor.fetchall()
         conn.commit()
         if len(a) > 0:
@@ -333,24 +331,41 @@ def get_all_users():
   except Exception as e:
     return "Ошибка" + str(e)
 
-
-
-
 #посмотреть историю встреч пользователя по айди
 @app.route('/user_meeting_history/<user_id>', methods=['GET'])
-def user_meeting_history(user_id):
+def user_meeting_historyd(user_id):
   try:
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    cursor.execute('''SELECT user_id_1, user_id_2, during FROM meetings WHERE (user_id_1 LIKE ? OR user_id_2 LIKE ?)''', (str(user_id), str(user_id)))
+    cursor.execute('''SELECT user_id_1, user_id_2, during FROM meetings WHERE (user_id_1 LIKE ? OR user_id_2 LIKE ?) AND status = 1 ''', (str(user_id), str(user_id)))
     conn.commit()
     a = cursor.fetchall()
-    conn.close()
-    return jsonify(a)
+    users = []
+    dicts = []
+    for i in a:
+      users.append(i[0])
+      users.append(i[1])
+      print(f'i = {i}')
+
+    users.remove(int(user_id))
+
+    for i in users:
+      cursor.execute('''SELECT name, surname, age, sex, about, telegram FROM user_info WHERE user_id = ?''', (str(i),))
+      res = cursor.fetchall()
+      if res:
+        user_infos = {
+            'name': res[0][0],
+            'surname': res[0][1],
+            'age': int(res[0][2]),
+            'sex': res[0][3],
+            'about': res[0][4],
+            'telegram': res[0][5]
+        }
+        dicts.append(user_infos)
+
+    return jsonify(dicts)
   except Exception as e:
     return "Ошибка" + str(e)
-
-
 
 @app.route('/test_random', methods=['GET'])
 def test_random():
@@ -400,4 +415,3 @@ if __name__ == '__main__':
   except KeyboardInterrupt:
       scheduler = BackgroundScheduler()
       scheduler.shutdown()
-k
